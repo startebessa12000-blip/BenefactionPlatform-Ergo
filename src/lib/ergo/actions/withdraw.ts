@@ -6,7 +6,7 @@ import {
 import { SColl, SLong, SPair, SBool, SByte } from '@fleet-sdk/serializer';
 import { type Project } from '../../common/project';
 import { get_dev_contract_address } from '../dev/dev_contract';
-import { getCurrentHeight, getUtxos, signTransaction, submitTransaction } from '../wallet';
+import { getCurrentHeight, getChangeAddress, signTransaction, submitTransaction, getUtxos } from 'wallet-svelte-component';
 import { stringToRendered } from '../utils';
 import { TERMINAL_ERGOTREE_HEX, type contract_version } from '../contract';
 
