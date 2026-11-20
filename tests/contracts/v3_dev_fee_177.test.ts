@@ -366,8 +366,20 @@ describe("Bene Contract v3 — Issue #177 Dev-Fee Invariants, #176 Zero-+1-APT &
 
     it("blocks #174 structural clone attack and allows #78 VLQ top-up", () => {
         const s = createV3Setup({ baseTokenId: ERG_BASE_TOKEN, devFeePct: 5n });
+        const probeParty = s.mockChain.newParty("ProbeSizer");
+        probeParty.addUTxOs({
+            value: 10_000_000_000n,
+            ergoTree: probeParty.address.ergoTree,
+            assets: [
+                { tokenId: s.projectNftId, amount: 1n },
+                { tokenId: s.aptTokenId, amount: 1n },
+                { tokenId: s.pftTokenId, amount: 100_000n },
+            ],
+            creationHeight: s.mockChain.height - 10,
+            additionalRegisters: {},
+        });
         const probeTx = new TransactionBuilder(s.mockChain.height)
-            .from(s.owner.utxos.toArray())
+            .from(probeParty.utxos.toArray())
             .to([
                 new OutputBuilder(SAFE_MIN_BOX_VALUE, s.beneTree)
                     .addTokens([
@@ -379,7 +391,7 @@ describe("Bene Contract v3 — Issue #177 Dev-Fee Invariants, #176 Zero-+1-APT &
                         R7: SLong(1_000_000n).toHex(), R8: s.r8.toHex(), R9: s.r9,
                     }),
             ])
-            .sendChangeTo(s.owner.address).payFee(RECOMMENDED_MIN_FEE_VALUE).build();
+            .sendChangeTo(probeParty.address).payFee(RECOMMENDED_MIN_FEE_VALUE).build();
         const compactMinErg = BigInt(serializeBox(probeTx.outputs[0]).length) * 360n;
 
         s.beneParty.addUTxOs({
