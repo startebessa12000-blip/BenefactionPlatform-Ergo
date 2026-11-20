@@ -7,6 +7,7 @@ export default defineConfig({
     exclude: ['web/**', 'node_modules/**', '.svelte-kit/**'],
     globals: true,
     environment: 'node',
+    server: { deps: { inline: ['wallet-svelte-component'] } },
   },
   resolve: {
     alias: {
