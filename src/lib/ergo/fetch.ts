@@ -21,6 +21,7 @@ function sigmaDecode<T>(hex: string): T {
     if (typeof fn === "function") return fn(hex) as T;
     return (FleetSerializer as any).SConstant.from(hex).data as T;
 }
+function getExplorerBaseUri(): string { return get(explorer_uri) || "https://api.ergoplatform.com"; }
 
 function recordConflict(projectId: string, boxIds: string[]) {
     project_id_conflicts.update((current) => new Map(current).set(projectId, boxIds));
@@ -67,10 +68,11 @@ function parseR8ByteArrays(r8Reg: any): string[] | null {
 function parseR4Tuple(r4Reg: any): [boolean, number] | null {
     const serHex = getSerializedHex(r4Reg);
     if (serHex) {
-        try {
-            const d = sigmaDecode<[boolean, bigint]>(serHex);
-            if (Array.isArray(d) && d.length === 2) return [Boolean(d[0]), Number(d[1])];
-        } catch {}
+     try {
+         const decoded: any = parse(serHex);
+         if (Array.isArray(decoded) && decoded.length === 2) { return [Boolean(decoded[0]), Number(decoded[1])]; }
+         if (decoded && typeof decoded === "object" && "_1" in decoded && "_2" in decoded) { return [Boolean(decoded._1), Number(decoded._2)]; }
+     } catch { /* Fall through */ }
     }
     if (r4Reg && typeof r4Reg.renderedValue === "string") {
         const v = JSON.parse(r4Reg.renderedValue.replace(/\[([a-f0-9]+)(,.*)/, '["$1"$2'));
@@ -107,7 +109,7 @@ function parseR9Utf8(r9Reg: any): string {
 }
 
 export async function fetch_token_details(id: string): Promise<TokenEIP4> {
-    const url = get(explorer_uri) + '/api/v1/tokens/' + id;
+    const url = getExplorerBaseUri() + '/api/v1/tokens/' + id;
     try {
         const response = await fetch(url, { method: 'GET' });
         if (response.ok) {
@@ -123,7 +125,7 @@ export async function fetch_token_details(id: string): Promise<TokenEIP4> {
 }
 
 export async function wait_until_confirmation(tx_id: string): Promise<Box | null> {
-    const url = get(explorer_uri) + '/api/v1/transactions/' + tx_id;
+    const url = getExplorerBaseUri() + '/api/v1/transactions/' + tx_id;
     await new Promise(resolve => setTimeout(resolve, 90000));
     const startTime = Date.now();
     while (true) {
@@ -171,7 +173,7 @@ export async function fetchProjectsFromBlockchain() {
             const params = { offset: 0, limit: 100 };
             const template = get_template_hash(version);
             while (moreDataAvailable) {
-                const url = get(explorer_uri) + '/api/v1/boxes/unspent/search';
+                const url = getExplorerBaseUri() + '/api/v1/boxes/unspent/search';
                 const response = await fetch(url + '?' + new URLSearchParams({ offset: params.offset.toString(), limit: params.limit.toString() }), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -205,7 +207,7 @@ export async function fetchProjectsFromBlockchain() {
 
 export async function fetchProjectById(projectId: string): Promise<Project | null> {
     try {
-        const response = await fetch(get(explorer_uri) + '/api/v1/boxes/unspent/byTokenId/' + projectId, { method: 'GET' });
+        const response = await fetch(getExplorerBaseUri() + '/api/v1/boxes/unspent/byTokenId/' + projectId, { method: 'GET' });
         if (!response.ok) return null;
         const json_data = await response.json();
         if (!json_data.items || json_data.items.length === 0) return null;
