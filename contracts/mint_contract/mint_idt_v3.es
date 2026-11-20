@@ -19,12 +19,19 @@
         noDuplicateNftInAnyBox &&
         totalMintedNft == 1L
     }
+    val r8Constants = contractBox.R8[Coll[Coll[Byte]]].get
+    val hasValidAptR8 = if (r8Constants.size >= 6) {
+        r8Constants(5) == SELF.tokens(0)._1
+    } else {
+        false
+    }
 
     val correctIdtSpend = {
         SELF.tokens.size >= 1 &&
         contractBox.tokens.size >= 2 &&
         SELF.tokens(0)._1 == contractBox.tokens(1)._1 &&
-        SELF.tokens(0)._2 == contractBox.tokens(1)._2
+        SELF.tokens(0)._2 == contractBox.tokens(1)._2 &&
+        hasValidAptR8
     }
 
     val correctContract = {
