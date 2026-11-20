@@ -120,7 +120,7 @@
     extractedBaseAmount > 0L && projectAmount > 0 && ownerOutputs.size >= 1 && (if (devFee > 0) devFeeOutputs.size >= 1 && ownerOutputs(0).id != devFeeOutputs(0).id else true)
   })
 
-  val isWithdrawUnsoldTokens: SigmaProp = ownerAuthentication && sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
+  val isWithdrawUnsoldTokens : SigmaProp= ownerAuthentication && sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
     OUTPUTS(0).tokens(1)._2 < selfAPT
   })
 

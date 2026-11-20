@@ -3,6 +3,7 @@ import {
   OutputBuilder,
   TransactionBuilder,
   SAFE_MIN_BOX_VALUE,
+
   RECOMMENDED_MIN_FEE_VALUE,
   ErgoAddress,
 } from "@fleet-sdk/core";
@@ -22,6 +23,13 @@ import BENE_CONTRACT_V3 from "../../contracts/bene_contract/contract_v3.es?raw";
 import MINT_IDT_V3 from "../../contracts/mint_contract/mint_idt_v3.es?raw";
 
 const TERMINAL_HEX = "1906010100d17300";
+
+function addBox(chain: MockChain, box: any) {
+  const party = chain.addParty(box.ergoTree, `p_${Math.random().toString(36).slice(2)}`);
+  party.addUTxOs(box);
+  return party.utxos.toArray().at(-1)!;
+}
+
 
 function longToBytes(n: bigint): Uint8Array {
   const buf = new ArrayBuffer(8);
@@ -77,7 +85,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const campaignUtxo = chain.addUTxO({
+    const campaignUtxo = addBox(chain, {
       ergoTree: contractV3.toHex(),
       value: 100_000_000_000n,
       assets: [
@@ -86,7 +94,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
         { tokenId: pftId, amount: 40_000n },
       ],
       additionalRegisters: {
-        R4: r4.toHex(),
+        R4: r4,
         R5: r5.toHex(),
         R6: r6.toHex(),
         R7: r7.toHex(),
@@ -123,7 +131,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
             { tokenId: aptId, amount: 940_000n },
           ])
           .setAdditionalRegisters({
-            R4: r4.toHex(),
+            R4: r4,
             R5: r5.toHex(),
             R6: r6.toHex(),
             R7: r7.toHex(),
@@ -182,7 +190,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, USD_BASE_TOKEN);
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const box = chain.addUTxO({
+    const box = addBox(chain, {
       ergoTree: contractV3.toHex(),
       value: SAFE_MIN_BOX_VALUE * 4n,
       assets: [
@@ -191,7 +199,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
         { tokenId: USD_BASE_TOKEN, amount: 19n },
       ],
       additionalRegisters: {
-        R4: r4.toHex(),
+        R4: r4,
         R5: r5.toHex(),
         R6: r6.toHex(),
         R7: r7.toHex(),
@@ -262,7 +270,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const mintInput = chain.addUTxO({
+    const mintInput = addBox(chain, {
       ergoTree: mintContract.toHex(),
       value: 10_000_000n,
     });
@@ -276,7 +284,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
           .mintToken({ amount: 2n, name: "NFT" })
           .addTokens([{ tokenId: pftId, amount: 100_000n }])
           .setAdditionalRegisters({
-            R4: r4.toHex(),
+            R4: r4,
             R5: r5.toHex(),
             R6: r6.toHex(),
             R7: r7.toHex(),
@@ -298,7 +306,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
           .mintToken({ amount: 1n, name: "NFT" })
           .addTokens([{ tokenId: pftId, amount: 100_000n }])
           .setAdditionalRegisters({
-            R4: r4.toHex(),
+            R4: r4,
             R5: r5.toHex(),
             R6: r6.toHex(),
             R7: r7.toHex(),
@@ -323,7 +331,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
           .mintToken({ amount: 1n, name: "NFT" })
           .addTokens([{ tokenId: pftId, amount: 100_000n }])
           .setAdditionalRegisters({
-            R4: r4.toHex(),
+            R4: r4,
             R5: r5.toHex(),
             R6: r6.toHex(),
             R7: r7.toHex(),
@@ -362,7 +370,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, USD_BASE_TOKEN);
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const box = chain.addUTxO({
+    const box = addBox(chain, {
       ergoTree: contractV3.toHex(),
       value: 50_000_000_000n,
       assets: [
@@ -371,7 +379,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
         { tokenId: USD_BASE_TOKEN, amount: 100n },
       ],
       additionalRegisters: {
-        R4: r4.toHex(),
+        R4: r4,
         R5: r5.toHex(),
         R6: r6.toHex(),
         R7: r7.toHex(),
@@ -424,7 +432,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 0n, pftId, "");
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const box = chain.addUTxO({
+    const box = addBox(chain, {
       ergoTree: contractV3.toHex(),
       value: 100_000_000_000n,
       assets: [
@@ -432,7 +440,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
         { tokenId: aptId, amount: 940_000n },
       ],
       additionalRegisters: {
-        R4: r4.toHex(),
+        R4: r4,
         R5: r5.toHex(),
         R6: r6.toHex(),
         R7: r7.toHex(),
@@ -480,7 +488,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const box = chain.addUTxO({
+    const box = addBox(chain, {
       ergoTree: contractV3.toHex(),
       value: 60_000_000_000n,
       assets: [
@@ -489,7 +497,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
         { tokenId: pftId, amount: 100_000n },
       ],
       additionalRegisters: {
-        R4: r4.toHex(),
+        R4: r4,
         R5: r5.toHex(),
         R6: r6.toHex(),
         R7: r7.toHex(),
@@ -510,7 +518,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
             { tokenId: pftId, amount: 99_000n },
           ])
           .setAdditionalRegisters({
-            R4: r4.toHex(),
+            R4: r4,
             R5: r5.toHex(),
             R6: SColl(SLong, [60_000n, 0n, 1_000n]).toHex(),
             R7: r7.toHex(),
@@ -538,7 +546,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
             { tokenId: pftId, amount: 99_000n },
           ])
           .setAdditionalRegisters({
-            R4: r4.toHex(),
+            R4: r4,
             R5: r5.toHex(),
             R6: SColl(SLong, [60_000n, 0n, 1_000n]).toHex(),
             R7: r7.toHex(),
