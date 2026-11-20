@@ -75,7 +75,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r6 = SColl(SLong, [60_000n, 0n, 60_000n]);
     const r7 = SLong(1_666_666n);
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
-    const r9 = SColl(SByte, utf8.encode("{}"));
+    const r9 = SColl(SByte, utf8.decode("{}"));
 
     const campaignUtxo = chain.addUTxO({
       ergoTree: contractV3.toHex(),
@@ -180,7 +180,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r6 = SColl(SLong, [19n, 0n, 19n]);
     const r7 = SLong(1n);
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, USD_BASE_TOKEN);
-    const r9 = SColl(SByte, utf8.encode("{}"));
+    const r9 = SColl(SByte, utf8.decode("{}"));
 
     const box = chain.addUTxO({
       ergoTree: contractV3.toHex(),
@@ -260,7 +260,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r6 = SColl(SLong, [0n, 0n, 0n]);
     const r7 = SLong(1_000_000n);
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
-    const r9 = SColl(SByte, utf8.encode("{}"));
+    const r9 = SColl(SByte, utf8.decode("{}"));
 
     const mintInput = chain.addUTxO({
       ergoTree: mintContract.toHex(),
@@ -360,7 +360,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r6 = SColl(SLong, [100n, 0n, 100n]);
     const r7 = SLong(1n);
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, USD_BASE_TOKEN);
-    const r9 = SColl(SByte, utf8.encode("{}"));
+    const r9 = SColl(SByte, utf8.decode("{}"));
 
     const box = chain.addUTxO({
       ergoTree: contractV3.toHex(),
@@ -422,7 +422,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r6 = SColl(SLong, [60_000n, 0n, 60_000n]);
     const r7 = SLong(1_666_666n);
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 0n, pftId, "");
-    const r9 = SColl(SByte, utf8.encode("{}"));
+    const r9 = SColl(SByte, utf8.decode("{}"));
 
     const box = chain.addUTxO({
       ergoTree: contractV3.toHex(),
@@ -478,7 +478,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r6 = SColl(SLong, [60_000n, 0n, 0n]);
     const r7 = SLong(1_000_000n);
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
-    const r9 = SColl(SByte, utf8.encode("{}"));
+    const r9 = SColl(SByte, utf8.decode("{}"));
 
     const box = chain.addUTxO({
       ergoTree: contractV3.toHex(),
