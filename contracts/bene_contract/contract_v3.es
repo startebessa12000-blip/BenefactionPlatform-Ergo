@@ -78,8 +78,8 @@
   val RefundCounterRemainsConstant = isReplicationBoxPresent && OUTPUTS(0).R6[Coll[Long]].get(1) == selfRefundCounter
   val AuxiliarExchangeCounterRemainsConstant = isReplicationBoxPresent && OUTPUTS(0).R6[Coll[Long]].get(2) == selfAuxiliarExchangeCounter
   val ergProtectedOnReplica = !isReplicationBoxPresent || (OUTPUTS(0).value >= selfValue)
-  val mantainValue = isReplicationBoxPresent && ergProtectedOnReplica && getBaseTokenAmount(OUTPUTS(0)) == getBaseTokenAmount(SELF)
-  val ownerAuthentication: SigmaProp = sigmaProp(INPUTS.exists({ (b: Box) => b.propositionBytes == ownerErgotree }))
+    val mantainValue = isReplicationBoxPresent && ergProtectedOnReplica && (if (isERGBase) OUTPUTS(0).value >= selfValue else getBaseTokenAmount(OUTPUTS(0)) == getBaseTokenAmount(SELF))
+    val ownerAuthentication: SigmaProp = sigmaProp(INPUTS.exists({ (b: Box) => b.propositionBytes == ownerErgotree })) || (if (ownerErgotree.size >= 3) { if (ownerErgotree.slice(0, 3) == fromBase16("0008cd")) proveDlog(decodePoint(ownerErgotree.slice(3, ownerErgotree.size))) else sigmaProp(false) } else sigmaProp(false))
   val deltaPFTokenAdded = {
     val outPft = OUTPUTS(0).tokens.filter({ (t: (Coll[Byte], Long)) => t._1 == pftTokenId })
     val outPftAmt = if (outPft.size > 0) outPft(0)._2 else 0L
