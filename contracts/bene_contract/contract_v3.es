@@ -131,7 +131,8 @@
   val isExchangeFundingTokens: SigmaProp = sigmaProp(isSelfReplication && SoldCounterRemainsConstant && RefundCounterRemainsConstant && mantainValue && minimumReached && {
     val out = OUTPUTS(0)
     val deltaTFT = out.tokens(1)._2 - selfAPT
-    val deltaTFT = out.tokens(1)._2 - selfAPT
+    val auxInc = out.R6[Coll[Long]].get(2) - selfAuxiliarExchangeCounter
+deltaTFT > 0L && deltaPFTokenAdded == -deltaTFT && auxInc == deltaTFT
   })
 
   sigmaProp(noExtraReplicas && (nftInReplica || nftRetired)) && (
