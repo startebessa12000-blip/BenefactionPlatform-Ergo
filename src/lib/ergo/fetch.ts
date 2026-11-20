@@ -55,11 +55,8 @@ function getSerializedHex(reg: any): string | null {
 
 function parseR8ByteArrays(r8Reg: any): string[] | null {
     const serHex = getSerializedHex(r8Reg);
-    if (serHex && serHex.startsWith("0c")) {
-        try {
-            return sigmaDecode<Uint8Array[]>(serHex).map((arr) => uint8ArrayToHex(arr));
-        } catch {}
-    }
+    if (serHex) {
+      try { const decoded = parse<any[]>(serHex); if (Array.isArray(decoded)) { return decoded.map((arr) => arr instanceof Uint8Array ? uint8ArrayToHex(arr) : Array.isArray(arr) ? uint8ArrayToHex(Uint8Array.from(arr)) : typeof arr === "string" ? arr : ""); } } catch { /* Fall through to renderedValue parser */ } }
     if (r8Reg && typeof r8Reg.renderedValue === "string") {
         const trimmed = r8Reg.renderedValue.trim().replace(/^\[|\]$/g, "");
         return trimmed.split(",").map((s: string) => s.replace(/["'\s]/g, ""));
@@ -104,9 +101,7 @@ function parseR6Counters(r6Reg: any): [number, number, number] {
 
 function parseR9Utf8(r9Reg: any): string {
     const serHex = getSerializedHex(r9Reg);
-    if (serHex && serHex.startsWith("0e")) {
-        try { return new TextDecoder("utf-8").decode(sigmaDecode<Uint8Array>(serHex)); } catch {}
-    }
+    if (serHex) { try { const bytes = parse<Uint8Array>(serHex); if (bytes instanceof Uint8Array) { return new TextDecoder("utf-8").decode(bytes); } } catch { /* Fall through */ } }
     if (r9Reg && typeof r9Reg.renderedValue === "string") return hexToUtf8(r9Reg.renderedValue) ?? "";
     return "";
 }
