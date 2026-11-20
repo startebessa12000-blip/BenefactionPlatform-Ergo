@@ -85,7 +85,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const r8 = buildR8(owner.address.ergoTree, devFee.address.ergoTree, 5n, pftId, "");
     const r9 = SColl(SByte, utf8.decode("{}"));
 
-    const campaignUtxo = addBox(chain, {
+    const contractParty = chain.addParty(contractV3.toHex(), "Contract"); contractParty.addUTxOs({
       ergoTree: contractV3.toHex(),
       value: 100_000_000_000n,
       assets: [
@@ -101,7 +101,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
         R8: r8.toHex(),
         R9: r9.toHex(),
       },
-    });
+    }); const campaignUtxo = contractParty.utxos.toArray().at(-1)!;
 
     // Attempting to terminate via isWithdrawUnsoldTokens is rejected
     const badTerminateTx = new TransactionBuilder(chain.height)
@@ -149,7 +149,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     expect(chain.execute(goodWithdrawUnsoldTx, { signers: [owner], throw: false })).toBe(true);
 
     // Subsequent full isWithdrawFunds (95 ERG owner + 5 ERG devFee + NFT in terminalScript) succeeds
-    const replicatedBox = chain.utxos.toArray().find((u) => u.ergoTree === contractV3.toHex())!;
+    const replicatedBox = contractParty.utxos.toArray().find((u) => u.ergoTree === contractV3.toHex())!;
     const withdrawFundsTx = new TransactionBuilder(chain.height)
       .from([replicatedBox, ...owner.utxos.toArray()])
       .to([
@@ -258,7 +258,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
     const mintContract = compile(mintSource, { version: 1 });
 
     const ctx = setupBeneTestContext("", ERG_BASE_TOKEN_NAME);
-    const pftId = "33".repeat(32);
+    const pftId = "33".repeat(32); const aptId = "22".repeat(32);
     const r4 = createR4({
       ...ctx,
       deadline: BigInt(Date.now() + 86_400_000),
@@ -272,7 +272,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
 
     const mintInput = addBox(chain, {
       ergoTree: mintContract.toHex(),
-      value: 10_000_000n,
+      value: 10_000_000n, creationHeight: chain.height, assets: [{ tokenId: aptId, amount: 100_001n }], additionalRegisters: {},
     });
     const selfId = mintInput.boxId;
 
@@ -282,7 +282,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
       .to([
         new OutputBuilder(SAFE_MIN_BOX_VALUE * 2n, contractV3Address)
           .mintToken({ amount: 2n, name: "NFT" })
-          .addTokens([{ tokenId: pftId, amount: 100_000n }])
+          .addTokens([{ tokenId: aptId, amount: 100_001n }])
           .setAdditionalRegisters({
             R4: r4,
             R5: r5.toHex(),
@@ -304,7 +304,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
       .to([
         new OutputBuilder(SAFE_MIN_BOX_VALUE * 2n, contractV3Address)
           .mintToken({ amount: 1n, name: "NFT" })
-          .addTokens([{ tokenId: pftId, amount: 100_000n }])
+          .addTokens([{ tokenId: aptId, amount: 100_001n }])
           .setAdditionalRegisters({
             R4: r4,
             R5: r5.toHex(),
@@ -329,7 +329,7 @@ describe("v3 dev fee & #177/#179/#174/#78 contract tests", () => {
       .to([
         new OutputBuilder(SAFE_MIN_BOX_VALUE * 2n, contractV3Address)
           .mintToken({ amount: 1n, name: "NFT" })
-          .addTokens([{ tokenId: pftId, amount: 100_000n }])
+          .addTokens([{ tokenId: aptId, amount: 100_001n }])
           .setAdditionalRegisters({
             R4: r4,
             R5: r5.toHex(),
