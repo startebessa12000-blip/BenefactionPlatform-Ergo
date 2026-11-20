@@ -132,39 +132,37 @@ export async function* submit_project(
 
     const currentHeight = await getCurrentHeight();
 
-    const unsignedTransactions = await new TransactionBuilder(currentHeight)
+    const txA = new TransactionBuilder(currentHeight)
         .from(mintInputs)
         .to(mintOutput)
         .sendChangeTo(walletPk)
         .payFee(RECOMMENDED_MIN_FEE_VALUE)
-        .build()
-        .chain(function (builder, parent) {
-            const txBInputs = [parent.outputs[0], ...parent.outputs.slice(1)];
-            const projectOutput = new OutputBuilder(minRequiredValue, ergoTreeAddress);
+        .build();
 
-            if (isV3) {
-                projectOutput.mintToken({ amount: 1n });
-            }
+    const txBInputs = [txA.outputs[0], ...txA.outputs.slice(1)];
+    const projectOutput = new OutputBuilder(minRequiredValue, ergoTreeAddress);
+    if (isV3) {
+        projectOutput.mintToken({ amount: 1n });
+    }
+    projectOutput
+        .addTokens(nonNftProjectTokens)
+        .setAdditionalRegisters({
+            R4: r4Hex,
+            R5: r5Hex,
+            R6: r6Hex,
+            R7: r7Hex,
+            R8: r8Hex,
+            R9: r9Hex
+        });
 
-            projectOutput
-                .addTokens(nonNftProjectTokens)
-                .setAdditionalRegisters({
-                    R4: r4Hex,
-                    R5: r5Hex,
-                    R6: r6Hex,
-                    R7: r7Hex,
-                    R8: r8Hex,
-                    R9: r9Hex
-                });
+    const txB = new TransactionBuilder(currentHeight)
+        .from(txBInputs)
+        .to(projectOutput)
+        .payFee(RECOMMENDED_MIN_FEE_VALUE)
+        .sendChangeTo(walletPk)
+        .build();
 
-            return builder
-                .from(txBInputs)
-                .to(projectOutput)
-                .payFee(RECOMMENDED_MIN_FEE_VALUE)
-                .sendChangeTo(walletPk)
-                .build();
-        })
-        .toEIP12Object();
+    const unsignedTransactions = [txA.toEIP12Object(), txB.toEIP12Object()];
 
     yield "Please sign the campaign creation transaction...";
 
