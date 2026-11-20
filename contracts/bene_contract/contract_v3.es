@@ -79,7 +79,7 @@
   val AuxiliarExchangeCounterRemainsConstant = isReplicationBoxPresent && OUTPUTS(0).R6[Coll[Long]].get(2) == selfAuxiliarExchangeCounter
   val ergProtectedOnReplica = !isReplicationBoxPresent || (OUTPUTS(0).value >= selfValue)
   val mantainValue = isReplicationBoxPresent && ergProtectedOnReplica && getBaseTokenAmount(OUTPUTS(0)) == getBaseTokenAmount(SELF)
-  val ownerAuthentication = INPUTS.exists({ (b: Box) => b.propositionBytes == ownerErgotree })
+  val ownerAuthentication: SigmaProp = sigmaProp(INPUTS.exists({ (b: Box) => b.propositionBytes == ownerErgotree }))
   val deltaPFTokenAdded = {
     val outPft = OUTPUTS(0).tokens.filter({ (t: (Coll[Byte], Long)) => t._1 == pftTokenId })
     val outPftAmt = if (outPft.size > 0) outPft(0)._2 else 0L
@@ -87,23 +87,23 @@
   }
   val minimumReached = (selfSoldCounter - selfRefundCounter) >= selfMinimumTokensSold
 
-  val isBuyTokens = isSelfReplication && ProofFundingTokenRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && ergProtectedOnReplica && {
+  val isBuyTokens: SigmaProp = sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && ergProtectedOnReplica && {
     val out = OUTPUTS(0)
     val deltaAPT = selfAPT - out.tokens(1)._2
     val expectedBase = deltaAPT * selfExchangeRate
     val baseAdded = getBaseTokenAmount(out) - getBaseTokenAmount(SELF)
     val soldInc = out.R6[Coll[Long]].get(0) - selfSoldCounter
     deltaAPT > 0L && baseAdded == expectedBase && soldInc == deltaAPT
-  }
+  })
 
-  val isRefundTokens = !minimumReached && ((selfBlockLimit._1 && HEIGHT > selfBlockLimit._2) || (!selfBlockLimit._1 && CONTEXT.preHeader.timestamp > selfBlockLimit._2)) && isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && (if (isERGBase) true else ergProtectedOnReplica) && {
+  val isRefundTokens: SigmaProp = sigmaProp(!minimumReached && ((selfBlockLimit._1 && HEIGHT > selfBlockLimit._2) || (!selfBlockLimit._1 && CONTEXT.preHeader.timestamp > selfBlockLimit._2)) && isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && (if (isERGBase) true else ergProtectedOnReplica) && {
     val out = OUTPUTS(0)
     val deltaAPT = out.tokens(1)._2 - selfAPT
     val expectedBase = deltaAPT * selfExchangeRate
     val baseSubtracted = getBaseTokenAmount(SELF) - getBaseTokenAmount(out)
     val refundInc = out.R6[Coll[Long]].get(1) - selfRefundCounter
     deltaAPT > 0L && baseSubtracted == expectedBase && refundInc == deltaAPT
-  }
+  })
 
   val endOrReplicate = if (isReplicationBoxPresent) {
     isSelfReplication && APTokenRemainsConstant && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && (if (isERGBase) true else ergProtectedOnReplica) && (if (isERGBase) OUTPUTS(0).value >= 1000000L else true)
@@ -111,28 +111,28 @@
     nftRetired
   }
 
-  val isWithdrawFunds = ownerAuthentication && minimumReached && endOrReplicate && {
+  val isWithdrawFunds: SigmaProp = ownerAuthentication && sigmaProp(minimumReached && endOrReplicate && {
     val extractedBaseAmount = if (isReplicationBoxPresent) getBaseTokenAmount(SELF) - getBaseTokenAmount(OUTPUTS(0)) else getBaseTokenAmount(SELF)
     val devFeeAmount = if (devFee > 0) (extractedBaseAmount.toBigInt * devFee + 99) / 100 else 0.toBigInt
     val projectAmount = extractedBaseAmount.toBigInt - devFeeAmount
     val ownerOutputs = OUTPUTS.filter({ (b: Box) => b.propositionBytes == ownerErgotree && getBaseTokenAmount(b).toBigInt >= projectAmount })
     val devFeeOutputs = OUTPUTS.filter({ (b: Box) => blake2b256(b.propositionBytes) == devFeeContractBytesHash && getBaseTokenAmount(b).toBigInt >= devFeeAmount })
     extractedBaseAmount > 0L && projectAmount > 0 && ownerOutputs.size >= 1 && (if (devFee > 0) devFeeOutputs.size >= 1 && ownerOutputs(0).id != devFeeOutputs(0).id else true)
-  }
+  })
 
-  val isWithdrawUnsoldTokens = ownerAuthentication && isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
+  val isWithdrawUnsoldTokens: SigmaProp = ownerAuthentication && sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
     OUTPUTS(0).tokens(1)._2 < selfAPT
-  }
+  })
 
-  val isAddTokens = ownerAuthentication && isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
+  val isAddTokens: SigmaProp = ownerAuthentication && sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
     OUTPUTS(0).tokens(1)._2 > selfAPT
-  }
+  })
 
-  val isExchangeFundingTokens = isSelfReplication && APTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && mantainValue && {
+  val isExchangeFundingTokens: SigmaProp = sigmaProp(isSelfReplication && APTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && mantainValue && {
     val out = OUTPUTS(0)
     val auxInc = out.R6[Coll[Long]].get(2) - selfAuxiliarExchangeCounter
     deltaPFTokenAdded > 0L && auxInc == deltaPFTokenAdded
-  }
+  })
 
   sigmaProp(noExtraReplicas && (nftInReplica || nftRetired)) && (
     isBuyTokens || isRefundTokens || isWithdrawFunds || isWithdrawUnsoldTokens || isAddTokens || isExchangeFundingTokens
