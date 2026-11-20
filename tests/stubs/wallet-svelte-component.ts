@@ -1,0 +1,1 @@
+export const getCurrentHeight = async () => 0; export const getChangeAddress = async () => ''; export const signTransaction = async (tx: unknown) => tx; export const submitTransaction = async () => ''; export const getUtxos = async () => [];
