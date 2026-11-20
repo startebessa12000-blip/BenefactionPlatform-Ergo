@@ -90,7 +90,7 @@ class InMemoryExplorer {
                 );
             }
             if (url.includes("/api/v1/boxes/unspent/search")) {
-                const u = new URL(url);
+                const u = new URL(url, "https://api.ergoplatform.com");
                 const off = Number(u.searchParams.get("offset") ?? "0");
                 const lim = Number(u.searchParams.get("limit") ?? "100");
                 const tpl = init?.body ? JSON.parse(init.body).ergoTreeTemplateHash : "";
