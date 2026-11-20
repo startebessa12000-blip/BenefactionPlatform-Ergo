@@ -26,18 +26,7 @@ class InMemoryExplorer {
     public txsById = new Map<string, any>();
     public tokenRegistry = new Map<string, { name: string; description: string; decimals: number; emissionAmount: number }>();
 
-    syncTx(eip12Tx: any, mockChain: MockChain, txIndex: number): string {
-        const txId = `tx_${txIndex}_${eip12Tx.inputs[0].boxId.slice(0, 12)}`;
-        for (const inp of eip12Tx.inputs) {
-            const existing = this.boxesById.get(inp.boxId);
-            if (existing) existing.spentTransactionId = txId;
-        }
-
-        const allUnspent: any[] = [];
-        for (const p of (mockChain as any).parties as any[]) {
-            for (const u of p.utxos.toArray()) allUnspent.push(u);
-        }
-
+    syncTx(eip12Tx: any, mockChain: MockChain, preExecBoxIds: Set<string>, txIndex: number): string { const newUtxos: any[] = []; for (const p of (mockChain as any).parties as any[]) { for (const u of p.utxos.toArray()) { if (!preExecBoxIds.has(u.boxId)) { newUtxos.push(u); } } } const fallbackHexTxId = txIndex.toString(16).padStart(64, "0"); const txId: string = newUtxos[0]?.transactionId ?? fallbackHexTxId; for (const inp of eip12Tx.inputs) { const existing = this.boxesById.get(inp.boxId); if (existing) existing.spentTransactionId = txId; }
         const dummy = {
             owner: "9fcwctfPQPkDfHgxBns5Uu3dwWpaoywhkpLEobLuztfQuV5mt3T",
             dev_hash: "00".repeat(32),
@@ -46,19 +35,9 @@ class InMemoryExplorer {
         };
         const v3Hex = get_ergotree_hex(dummy, "v3");
         const v2Hex = get_ergotree_hex(dummy, "v2");
-        const used = new Set<string>();
 
         const outputs = eip12Tx.outputs.map((out: any, idx: number) => {
-            const matched = allUnspent.find(
-                (u) =>
-                    !this.boxesById.has(u.boxId) &&
-                    !used.has(u.boxId) &&
-                    u.ergoTree === out.ergoTree &&
-                    BigInt(u.value) === BigInt(out.value) &&
-                    (u.assets || []).length === (out.assets || []).length
-            );
-            if (matched) used.add(matched.boxId);
-            const boxId = matched ? matched.boxId : `${txId}_out_${idx}`;
+           const matched = newUtxos.find((u) => u.index === idx); const boxId: string = matched ? matched.boxId : `${txId.slice(0, 60)}${idx.toString(16).padStart(4, "0")}`;;
             const tpl =
                 out.ergoTree === v3Hex ? get_template_hash("v3") :
                 out.ergoTree === v2Hex ? get_template_hash("v2") : "other";
@@ -203,9 +182,10 @@ function setupLifecycleEnv(version: contract_version, pftTokenId: string, emissi
             })),
         signTransaction: async (tx) => tx,
         submitTransaction: async (tx) => {
+            const preExecBoxIds = new Set<string>(); for (const p of (mockChain as any).parties as any[]) { for (const u of p.utxos.toArray()) preExecBoxIds.add(u.boxId); }
             expect(mockChain.execute(tx, { signers: [state.signer] })).toBe(true);
             txCount += 1;
-            return explorer.syncTx(tx, mockChain, txCount);
+            return explorer.syncTx(tx, mockChain, preExecBoxIds, txCount);
         },
     });
 
