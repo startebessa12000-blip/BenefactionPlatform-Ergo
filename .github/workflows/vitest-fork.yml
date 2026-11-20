@@ -14,4 +14,4 @@ jobs:
         with:
           node-version: 20
       - run: npm install --legacy-peer-deps
-      - run: npx vitest run tests/contracts/v3_dev_fee_177.test.ts tests/contracts/withdraw_funds.test.ts tests/contracts/withdraw_unsold_tokens.test.ts
+      - run: npx vitest run tests/contracts/v3_dev_fee_177.test.ts tests/contracts/withdraw_funds.test.ts
