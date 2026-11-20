@@ -5,10 +5,14 @@
   val devFee = byteArrayToBigInt(r8(2))
   val pftTokenId = r8(3)
   val baseTokenId = if (r8.size > 4) r8(4) else Coll[Byte]()
+    val aptTokenId = if (r8.size > 5) r8(5) else Coll[Byte]()
 
   val selfId = SELF.tokens(0)._1
-  val selfAPTId = SELF.tokens(1)._1
-  val selfAPT = SELF.tokens(1)._2
+def getAPTTokenAmount(box: Box): Long = {
+        val apts = box.tokens.filter { (token: (Coll[Byte], Long)) => token._1 == aptTokenId }
+        if (apts.size > 0) { apts(0)._2 } else { 0L }
+    }
+    val selfAPT = getAPTTokenAmount(SELF)
   val selfValue = SELF.value
   val selfBlockLimit = SELF.R4[(Boolean, Long)].get
   val selfMinimumTokensSold = SELF.R5[Long].get
@@ -47,17 +51,30 @@
   val isSelfReplication = isReplicationBoxPresent && {
     val out = OUTPUTS(0)
     val r6 = out.R6[Coll[Long]].get
-    val noAddsOtherTokens = if (isERGBase) {
-      out.tokens.size >= 2 && out.tokens.size <= 3 && (out.tokens.size == 2 || out.tokens(2)._1 == pftTokenId)
-    } else {
-      out.tokens.size >= 2 && out.tokens.size <= 4 && out.tokens.forall({ (t: (Coll[Byte], Long)) =>
-        t._1 == selfId || t._1 == selfAPTId || t._1 == pftTokenId || t._1 == baseTokenId
-      })
-    }
-    out.tokens.size >= 2 &&
-    out.tokens(0) == (selfId, 1L) &&
-    out.tokens(1)._1 == selfAPTId &&
-    out.tokens(1)._2 >= 1L &&
+            val outBox = out
+            val validTokenPositions = outBox.tokens.size >= 1 &&
+                                      outBox.tokens(0)._1 == selfId &&
+                                      outBox.tokens(0)._2 == 1L
+
+            val tailTokens = outBox.tokens.slice(1, outBox.tokens.size)
+            val aptEntries = tailTokens.filter({ (t: (Coll[Byte], Long)) => t._1 == aptTokenId })
+            val atMostOneApt = aptEntries.size <= 1
+            val atMostOnePft = tailTokens.filter({ (t: (Coll[Byte], Long)) => t._1 == pftTokenId }).size <= 1
+            val aptFirstIfPresent = if (aptEntries.size == 0) true else (tailTokens(0)._1 == aptTokenId)
+
+            val noAddsOtherTokens = if (isERGBase) {
+                val onlyAllowed = tailTokens.forall({ (t: (Coll[Byte], Long)) =>
+                    t._1 == aptTokenId || t._1 == pftTokenId
+                })
+                outBox.tokens.size <= 3 && onlyAllowed && atMostOneApt && atMostOnePft && aptFirstIfPresent
+            } else {
+                val onlyAllowed = tailTokens.forall({ (t: (Coll[Byte], Long)) =>
+                    t._1 == aptTokenId || t._1 == pftTokenId || t._1 == baseTokenId
+                })
+                val atMostOneBase = tailTokens.filter({ (t: (Coll[Byte], Long)) => t._1 == baseTokenId }).size <= 1
+                outBox.tokens.size <= 4 && onlyAllowed && atMostOneApt && atMostOnePft && atMostOneBase && aptFirstIfPresent
+            }
+            validTokenPositions &&
     r6.size == 3 &&
     out.R4[(Boolean, Long)].get == selfBlockLimit &&
     out.R5[Long].get == selfMinimumTokensSold &&
@@ -68,7 +85,7 @@
     noAddsOtherTokens
   }
 
-  val APTokenRemainsConstant = isReplicationBoxPresent && OUTPUTS(0).tokens.size >= 2 && OUTPUTS(0).tokens(1)._1 == selfAPTId && OUTPUTS(0).tokens(1)._2 == selfAPT
+  val APTokenRemainsConstant = isReplicationBoxPresent && getAPTTokenAmount(OUTPUTS(0)) == selfAPT
   val ProofFundingTokenRemainsConstant = isReplicationBoxPresent && {
     val outPft = OUTPUTS(0).tokens.filter({ (t: (Coll[Byte], Long)) => t._1 == pftTokenId })
     if (temporaryFundingTokenAmountOnContract == 0L) outPft.size == 0
@@ -89,7 +106,7 @@
 
   val isBuyTokens: SigmaProp = sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && ergProtectedOnReplica && {
     val out = OUTPUTS(0)
-    val deltaAPT = selfAPT - out.tokens(1)._2
+    val deltaAPT = selfAPT - getAPTTokenAmount(OUTPUTS(0))
     val expectedBase = deltaAPT * selfExchangeRate
     val baseAdded = getBaseTokenAmount(out) - getBaseTokenAmount(SELF)
     val soldInc = out.R6[Coll[Long]].get(0) - selfSoldCounter
@@ -98,7 +115,7 @@
 
   val isRefundTokens: SigmaProp = sigmaProp(!minimumReached && ((selfBlockLimit._1 && HEIGHT > selfBlockLimit._2) || (!selfBlockLimit._1 && CONTEXT.preHeader.timestamp > selfBlockLimit._2)) && isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && (if (isERGBase) true else ergProtectedOnReplica) && {
     val out = OUTPUTS(0)
-    val deltaAPT = out.tokens(1)._2 - selfAPT
+    val deltaAPT = getAPTTokenAmount(OUTPUTS(0)) - selfAPT
     val expectedBase = deltaAPT * selfExchangeRate
     val baseSubtracted = getBaseTokenAmount(SELF) - getBaseTokenAmount(out)
     val refundInc = out.R6[Coll[Long]].get(1) - selfRefundCounter
@@ -117,7 +134,7 @@
     val projectAmount = extractedBaseAmount.toBigInt - devFeeAmount
     val ownerOutputs = OUTPUTS.filter({ (b: Box) => b.propositionBytes == ownerErgotree && getBaseTokenAmount(b).toBigInt >= projectAmount })
     val devFeeOutputs = OUTPUTS.filter({ (b: Box) => blake2b256(b.propositionBytes) == devFeeContractBytesHash && getBaseTokenAmount(b).toBigInt >= devFeeAmount })
-    extractedBaseAmount > 0L && projectAmount > 0 && ownerOutputs.size >= 1 && (if (devFee > 0) devFeeOutputs.size >= 1 && ownerOutputs(0).id != devFeeOutputs(0).id else true)
+    extractedBaseAmount > 0L && projectAmount > 0 && ownerOutputs.size >= 1 && (if (devFee > 0) devFeeOutputs.size >= 1 && ownerOutputs(0).id != devFeeOutputs(0).id else true) && (if (isERGBase || isReplicationBoxPresent) true else (ownerOutputs.size >= 1 && ownerOutputs(0).value >= SELF.value))
   })
 
   val isWithdrawUnsoldTokens : SigmaProp= ownerAuthentication && sigmaProp(isSelfReplication && APTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
@@ -130,7 +147,7 @@
 
   val isExchangeFundingTokens: SigmaProp = sigmaProp(isSelfReplication && SoldCounterRemainsConstant && RefundCounterRemainsConstant && mantainValue && minimumReached && {
     val out = OUTPUTS(0)
-    val deltaTFT = out.tokens(1)._2 - selfAPT
+    val deltaTFT = getAPTTokenAmount(OUTPUTS(0)) - selfAPT
     val auxInc = out.R6[Coll[Long]].get(2) - selfAuxiliarExchangeCounter
 deltaTFT > 0L && deltaPFTokenAdded == -deltaTFT && auxInc == deltaTFT
   })
