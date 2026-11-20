@@ -120,18 +120,18 @@
     extractedBaseAmount > 0L && projectAmount > 0 && ownerOutputs.size >= 1 && (if (devFee > 0) devFeeOutputs.size >= 1 && ownerOutputs(0).id != devFeeOutputs(0).id else true)
   })
 
-  val isWithdrawUnsoldTokens : SigmaProp= ownerAuthentication && sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
-    OUTPUTS(0).tokens(1)._2 < selfAPT
+  val isWithdrawUnsoldTokens : SigmaProp= ownerAuthentication && sigmaProp(isSelfReplication && APTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
+    deltaPFTokenAdded < 0L && (-deltaPFTokenAdded) <= temporaryFundingTokenAmountOnContract
   })
 
   val isAddTokens: SigmaProp = ownerAuthentication && sigmaProp(isSelfReplication && ProofFundingTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && AuxiliarExchangeCounterRemainsConstant && mantainValue && {
     OUTPUTS(0).tokens(1)._2 > selfAPT
   })
 
-  val isExchangeFundingTokens: SigmaProp = sigmaProp(isSelfReplication && APTokenRemainsConstant && SoldCounterRemainsConstant && RefundCounterRemainsConstant && mantainValue && {
+  val isExchangeFundingTokens: SigmaProp = sigmaProp(isSelfReplication && SoldCounterRemainsConstant && RefundCounterRemainsConstant && mantainValue && minimumReached && {
     val out = OUTPUTS(0)
-    val auxInc = out.R6[Coll[Long]].get(2) - selfAuxiliarExchangeCounter
-    deltaPFTokenAdded > 0L && auxInc == deltaPFTokenAdded
+    val deltaTFT = out.tokens(1)._2 - selfAPT
+    val deltaTFT = out.tokens(1)._2 - selfAPT
   })
 
   sigmaProp(noExtraReplicas && (nftInReplica || nftRetired)) && (
