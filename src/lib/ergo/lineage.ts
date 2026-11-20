@@ -48,8 +48,7 @@ export async function resolveCanonicalBox(
     version: contract_version,
     customExplorerUri?: string
 ): Promise<LineageResolution> {
-    const baseUri = customExplorerUri ?? get(explorer_uri);
-    if (!baseUri) return { status: "unresolved" };
+    const baseUri = customExplorerUri ?? (get(explorer_uri) || "https://api.ergoplatform.com");
 
     const cacheKey = `${version}:${projectId}`;
     let current = lineageTipCache.get(cacheKey) ?? null;
