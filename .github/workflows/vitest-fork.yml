@@ -9,10 +9,14 @@ jobs:
         with:
           node-version: '20'
       - run: npm install --legacy-peer-deps
-      - name: Run Vitest Suite
+      - name: Diagnose Lifecycle
         run: |
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          npx vitest run tests/contracts/v3_dev_fee_177.test.ts tests/contracts/v3_full_lifecycle_integration.test.ts tests/contracts/withdraw_funds.test.ts tests/contracts/buy_tokens.test.ts tests/contracts/exchange.test.ts tests/contracts/contract_creation.test.ts tests/contracts/counters.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          EXIT_CODE=${PIPESTATUS[0]}
+          echo '### submit.ts tail' >> $GITHUB_STEP_SUMMARY
+          echo '```ts' >> $GITHUB_STEP_SUMMARY
+          tail -n 65 src/lib/ergo/actions/submit.ts >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          exit $EXIT_CODE
+          echo '### Quick Diagnostic Run' >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          node -e 'const fs=require("fs");let s=fs.readFileSync("src/lib/ergo/fetch.ts","utf8");const orig=s;s=s.replace(/return null;/g,(m,off)=>"{ console.log(\"NULL_LINE_\"+orig.slice(0,off).split(\"\\n\").length); return null; }");fs.writeFileSync("src/lib/ergo/fetch.ts",s);'
+          npx vitest run tests/contracts/v3_full_lifecycle_integration.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
