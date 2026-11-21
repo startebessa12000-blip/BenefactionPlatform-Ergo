@@ -1,3 +1,6 @@
+import { serializeBox } from "@fleet-sdk/serializer";
+import { blake2b256 } from "@fleet-sdk/crypto";
+import { uint8ArrayToHex } from "$lib/ergo/utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MockChain } from "@fleet-sdk/mock-chain";
 import { ErgoAddress } from "@fleet-sdk/core";
@@ -64,11 +67,29 @@ class InMemoryExplorer {
                     (u.assets || []).length === (out.assets || []).length
             );
             if (matched) usedBoxIds.add(matched.boxId);
+            const outTxId = matched?.transactionId ?? recordTxId;
+            const outIndex = matched?.index ?? idx;
+            const rawRegs = matched?.additionalRegisters ?? out.additionalRegisters ?? {};
+            const treeHex = matched?.ergoTree ?? out.ergoTree;
+            const creationHeight = matched?.creationHeight ?? out.creationHeight ?? mockChain.height;
+            const rawAssets = (matched?.assets ?? out.assets) || [];
 
             const boxId: string = matched
                 ? matched.boxId
-                : `${txIndex.toString(16).padStart(32, "0")}${idx.toString(16).padStart(32, "0")}`;
-            const rawRegs = matched?.additionalRegisters ?? out.additionalRegisters ?? {};
+                : uint8ArrayToHex(
+                      blake2b256(
+                          serializeBox({
+                              value: BigInt(out.value),
+                              ergoTree: treeHex,
+                              creationHeight,
+                              assets: rawAssets.map((a: any) => ({ tokenId: a.tokenId, amount: BigInt(a.amount) })),
+                              additionalRegisters: rawRegs,
+                              transactionId: outTxId,
+                              index: outIndex,
+                          })
+                      )
+                  );
+            
             const regs: Record<string, any> = {};
             for (const [k, hexVal] of Object.entries(rawRegs)) {
                 regs[k] = {
@@ -81,7 +102,6 @@ class InMemoryExplorer {
                 };
             }
 
-            const treeHex = matched?.ergoTree ?? out.ergoTree;
             const rec = {
                 boxId,
                 transactionId: matched?.transactionId ?? recordTxId,
@@ -254,7 +274,9 @@ describe("Full End-to-End Project Lifecycle & Lineage Integration (Issues #176 &
 
         await fetchProjectsFromBlockchain();
         const created = Array.from(get(projects).data.values())[0];
-        expect(created).toBeDefined();
+        if (!created) {
+            throw new Error("NO_CREATED_PROJECT: " + JSON.stringify(Array.from(env.explorer.boxesById.values()).map((b) => ({ id: b.boxId, tplEq: b.ergoTreeTemplateHash === get_template_hash("v3"), spent: b.spentTransactionId, assets: b.assets, r8: b.additionalRegisters?.R8?.serializedValue }))));
+        }
         const nftId = created.project_id;
         expect(created.version).toBe("v3");
         expect(is_legacy_version(created.version)).toBe(false);
