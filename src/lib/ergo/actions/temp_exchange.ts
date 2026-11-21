@@ -83,7 +83,7 @@ export async function temp_exchange(
             .sendChangeTo(walletPk)
             .payFee(RECOMMENDED_MIN_FEE_VALUE)
             .build();
-        const requiredMinErg = BigInt(serializeBox(probeTx.outputs[0]).length) * 360n;
+        const requiredMinErg = BigInt(serializeBox(probeTx.outputs[0]).toBytes().length) * 360n;
         if (requiredMinErg > replicaErgValue) {
             replicaErgValue = requiredMinErg;
         }
