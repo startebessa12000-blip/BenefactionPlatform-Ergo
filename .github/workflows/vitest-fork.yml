@@ -1,0 +1,19 @@
+name: Vitest Fork Verify 177
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --legacy-peer-deps
+      - name: Run Vitest Suite
+        run: npx vitest run tests/contracts/v3_dev_fee_177.test.ts tests/contracts/v3_full_lifecycle_integration.test.ts tests/contracts/withdraw_funds.test.ts tests/contracts/buy_tokens.test.ts tests/contracts/exchange.test.ts tests/contracts/contract_creation.test.ts tests/contracts/counters.test.ts --no-color 2>&1 | tee vitest.log
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          cat vitest.log >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
