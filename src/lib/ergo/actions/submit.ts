@@ -139,7 +139,8 @@ export async function* submit_project(
         .payFee(RECOMMENDED_MIN_FEE_VALUE)
         .build();
 
-    const txBInputs = [txA.outputs[0], ...txA.outputs.slice(1)];
+    const creatorErgoTree = ErgoAddress.fromBase58(walletPk).ergoTree;
+    const txBInputs = [txA.outputs[0], ...txA.outputs.slice(1).filter((out) => out.ergoTree === creatorErgoTree)];
     const projectOutput = new OutputBuilder(minRequiredValue, ergoTreeAddress);
     if (isV3) {
         projectOutput.mintToken({ amount: 1n });
