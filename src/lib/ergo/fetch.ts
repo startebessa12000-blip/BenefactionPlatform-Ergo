@@ -225,7 +225,7 @@ export async function wait_until_confirmation(tx_id: string): Promise<Box | null
 
 async function selectCanonicalCandidate(projectId: string, candidates: Project[]): Promise<Project | null> {
     if (candidates.length === 0) return null;
-    if (candidates.length === 1) return candidates[0];
+    
     for (const candidate of candidates) {
         const res = await resolveCanonicalBox(projectId, candidate.version);
         if (res.status === "live") {
@@ -297,7 +297,7 @@ export async function fetchProjectById(projectId: string): Promise<Project | nul
         if (candidates.length === 0) return null;
         const winner = await selectCanonicalCandidate(projectId, candidates);
         if (!winner) {
-            recordConflict(projectId, candidates.map((p) => p.box.boxId));
+           if (candidates.length > 1)  recordConflict(projectId, candidates.map((p) => p.box.boxId));
             return null;
         }
         clearConflict(projectId);
