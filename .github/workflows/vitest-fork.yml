@@ -9,25 +9,10 @@ jobs:
         with:
           node-version: '20'
       - run: npm install --legacy-peer-deps
-      - name: Diagnose Lifecycle
+      - name: Run Vitest Suite
         run: |
-          cat << 'EOF' > /tmp/patch_diag.cjs
-          const fs = require("fs");
-          const orig = fs.readFileSync("src/lib/ergo/fetch.ts", "utf8");
-          const patched = orig.replace(/return null;/g, (m, off) => {
-            const line = orig.slice(0, off).split("\n").length;
-            return `{ console.log("FETCH_NULL_AT_LINE_${line}"); return null; }`;
-          });
-          fs.writeFileSync("src/lib/ergo/fetch.ts", patched);
-
-          let t = fs.readFileSync("tests/contracts/v3_full_lifecycle_integration.test.ts", "utf8");
-          t = t.replace(
-            "await fetchProjectsFromBlockchain();",
-            'console.log("DIAG_BOXES:", Array.from(env.explorer.boxesById.values()).map(b => ({ id: b.boxId, idx: b.index, tplMatch: b.ergoTreeTemplateHash === get_template_hash("v3"), spent: b.spentTransactionId, assetsLen: b.assets.length, a0: b.assets[0], regs: Object.keys(b.additionalRegisters) }))); await fetchProjectsFromBlockchain();'
-          );
-          fs.writeFileSync("tests/contracts/v3_full_lifecycle_integration.test.ts", t);
-          EOF
-          node /tmp/patch_diag.cjs
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          npx vitest run tests/contracts/v3_full_lifecycle_integration.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          npx vitest run tests/contracts/v3_dev_fee_177.test.ts tests/contracts/v3_full_lifecycle_integration.test.ts tests/contracts/withdraw_funds.test.ts tests/contracts/buy_tokens.test.ts tests/contracts/exchange.test.ts tests/contracts/contract_creation.test.ts tests/contracts/counters.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          EXIT_CODE=${PIPESTATUS[0]}
           echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $EXIT_CODE
