@@ -54,32 +54,83 @@ export async function resolveCanonicalBox(
     let current = lineageTipCache.get(cacheKey) ?? null;
 
     if (!current) {
-        const mintResp = await fetchJson(`${baseUri}/api/v1/boxes/byTokenId/${projectId}?offset=0&limit=1`);
-        const items: ExplorerBoxSummary[] | undefined = mintResp?.items;
-        if (!items || items.length === 0) return { status: "unresolved" };
+        let mintTx: any = null;
+const issuingInputBox = await fetchJson(`${baseUri}/api/v1/boxes/${projectId}`);
+if (issuingInputBox && issuingInputBox.boxId) {
+if (!issuingInputBox.spentTransactionId) return { status: "ended" };
+mintTx = await fetchJson(`${baseUri}/api/v1/transactions/${issuingInputBox.spentTransactionId}`);
+            } else {
+            const tokenInfo = await fetchJson(`${baseUri}/api/v1/tokens/${projectId}`);
+            if (!tokenInfo || !tokenInfo.boxId) return { status: "unresolved" };
+            const tokenOutBox = await fetchJson(`${baseUri}/api/v1/boxes/${tokenInfo.boxId}`);
+            if (!tokenOutBox || !tokenOutBox.transactionId) return { status: "unresolved" };
+            mintTx = await fetchJson(`${baseUri}/api/v1/transactions/${tokenOutBox.transactionId}`);
+        }
 
-        const firstBox = items[0];
-        if (matchesCampaignTemplate(firstBox.ergoTree, version)) {
-            if (version === "v3") {
-                const firstAsset = firstBox.assets?.[0];
-                if (!firstAsset || firstAsset.tokenId !== projectId || BigInt(firstAsset.amount) !== 1n) {
-                    return { status: "unresolved" };
+        if (!mintTx || !Array.isArray(mintTx.outputs) || mintTx.outputs.length === 0) {
+            return { status: "unresolved" };
+        }
+
+        if (Array.isArray(mintTx.inputs) && mintTx.inputs.length > 0) {
+            if (mintTx.inputs[0]?.boxId !== projectId) {
+                return { status: "ended" };
+            }
+        }
+
+        let totalMinted = 0n;
+        for (const out of mintTx.outputs) {
+            if (!Array.isArray(out?.assets)) continue;
+            for (const asset of out.assets) {
+                if (asset?.tokenId === projectId) {
+                    totalMinted += BigInt(asset.amount);
                 }
             }
-            current = firstBox;
-        } else {
-            if (version === "v3") return { status: "unresolved" };
-            const refreshedMint = await refreshBoxState(baseUri, firstBox);
-            if (!refreshedMint) return { status: "unresolved" };
-            if (!refreshedMint.spentTransactionId) return { status: "ended" };
+        }
+        if (totalMinted <= 0n) {
+            return { status: "unresolved" };
+        }
 
-            const txB = await fetchJson(`${baseUri}/api/v1/transactions/${refreshedMint.spentTransactionId}`);
-            const genesisCandidate: ExplorerBoxSummary | undefined = txB?.outputs?.[0];
-            if (!genesisCandidate || !matchesCampaignTemplate(genesisCandidate.ergoTree, version)) return { status: "ended" };
-            if (genesisCandidate.assets?.[0]?.tokenId !== projectId) return { status: "ended" };
-            current = genesisCandidate;
+        const mintOut0: ExplorerBoxSummary | undefined = mintTx.outputs[0];
+        const out0FirstAsset = mintOut0?.assets?.[0];
+        if (!mintOut0 || !out0FirstAsset || out0FirstAsset.tokenId !== projectId) {
+            return { status: "ended" };
+        }
+        const out0Amount = BigInt(out0FirstAsset.amount);
+
+        if (version === "v3") {
+            if (totalMinted !== 1n || out0Amount !== 1n || !matchesCampaignTemplate(mintOut0.ergoTree, "v3")) {
+                return { status: "ended" };
+            }
+            current = mintOut0;
+        } else {
+            if (out0Amount !== totalMinted) {
+                return { status: "ended" };
+            }
+            if (matchesCampaignTemplate(mintOut0.ergoTree, version)) {
+                current = mintOut0;
+            } else {
+                const refreshedMint = await refreshBoxState(baseUri, mintOut0);
+                if (!refreshedMint) return { status: "unresolved" };
+                if (!refreshedMint.spentTransactionId) return { status: "ended" };
+
+                const txB = await fetchJson(`${baseUri}/api/v1/transactions/${refreshedMint.spentTransactionId}`);
+                const genesisCandidate: ExplorerBoxSummary | undefined = txB?.outputs?.[0];
+                const genAsset = genesisCandidate?.assets?.[0];
+                if (
+                    !genesisCandidate ||
+                    !matchesCampaignTemplate(genesisCandidate.ergoTree, version) ||
+                    !genAsset ||
+                    genAsset.tokenId !== projectId ||
+                    BigInt(genAsset.amount) !== totalMinted
+                ) {
+                    return { status: "ended" };
+                }
+                current = genesisCandidate;
+            }
         }
     }
+    
+    
 
     for (let hop = 0; hop < 10_000; hop++) {
         const refreshed = await refreshBoxState(baseUri, current);
