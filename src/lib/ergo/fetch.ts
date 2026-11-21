@@ -21,6 +21,7 @@ function sigmaDecode<T>(hex: string): T {
     if (typeof fn === "function") return fn(hex) as T;
     return (FleetSerializer as any).SConstant.from(hex).data as T;
 }
+const parse = sigmaDecode;
 function getExplorerBaseUri(): string { return get(explorer_uri) || "https://api.ergoplatform.com"; }
 
 function recordConflict(projectId: string, boxIds: string[]) {
