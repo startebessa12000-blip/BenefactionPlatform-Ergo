@@ -11,12 +11,23 @@ jobs:
       - run: npm install --legacy-peer-deps
       - name: Diagnose Lifecycle
         run: |
-          echo '### submit.ts tail' >> $GITHUB_STEP_SUMMARY
-          echo '```ts' >> $GITHUB_STEP_SUMMARY
-          tail -n 65 src/lib/ergo/actions/submit.ts >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo '### Quick Diagnostic Run' >> $GITHUB_STEP_SUMMARY
+          cat << 'EOF' > /tmp/patch_diag.cjs
+          const fs = require("fs");
+          const orig = fs.readFileSync("src/lib/ergo/fetch.ts", "utf8");
+          const patched = orig.replace(/return null;/g, (m, off) => {
+            const line = orig.slice(0, off).split("\n").length;
+            return `{ console.log("FETCH_NULL_AT_LINE_${line}"); return null; }`;
+          });
+          fs.writeFileSync("src/lib/ergo/fetch.ts", patched);
+
+          let t = fs.readFileSync("tests/contracts/v3_full_lifecycle_integration.test.ts", "utf8");
+          t = t.replace(
+            "await fetchProjectsFromBlockchain();",
+            'console.log("DIAG_BOXES:", Array.from(env.explorer.boxesById.values()).map(b => ({ id: b.boxId, idx: b.index, tplMatch: b.ergoTreeTemplateHash === get_template_hash("v3"), spent: b.spentTransactionId, assetsLen: b.assets.length, a0: b.assets[0], regs: Object.keys(b.additionalRegisters) }))); await fetchProjectsFromBlockchain();'
+          );
+          fs.writeFileSync("tests/contracts/v3_full_lifecycle_integration.test.ts", t);
+          EOF
+          node /tmp/patch_diag.cjs
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          node -e 'const fs=require("fs");let s=fs.readFileSync("src/lib/ergo/fetch.ts","utf8");const orig=s;s=s.replace(/return null;/g,(m,off)=>"{ console.log(\"NULL_LINE_\"+orig.slice(0,off).split(\"\\n\").length); return null; }");fs.writeFileSync("src/lib/ergo/fetch.ts",s);'
           npx vitest run tests/contracts/v3_full_lifecycle_integration.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
