@@ -9,18 +9,10 @@ jobs:
         with:
           node-version: '20'
       - run: npm install --legacy-peer-deps
-      - name: Trace Sync
+      - name: Run Vitest Suite
         run: |
-          cat << 'EOF' > /tmp/trace.cjs
-          const fs = require("fs");
-          let t = fs.readFileSync("tests/contracts/v3_full_lifecycle_integration.test.ts", "utf8");
-          t = t.replace(
-            "this.txsById.set(recordTxId, { id: recordTxId, numConfirmations: 1, outputs });",
-            'console.log("SYNC_TRACE", { txIndex, eipOuts: eip12Tx.outputs.length, parties: trackedParties.map(p => [p.name, p.utxos.toArray().length, p.utxos.toArray()[0]?.boxId]), mapSize: this.boxesById.size, outIds: outputs.map(o => [o.boxId, o.ergoTreeTemplateHash === get_template_hash("v3"), o.assets]) }); this.txsById.set(recordTxId, { id: recordTxId, numConfirmations: 1, outputs });'
-          );
-          fs.writeFileSync("tests/contracts/v3_full_lifecycle_integration.test.ts", t);
-          EOF
-          node /tmp/trace.cjs
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          npx vitest run tests/contracts/v3_full_lifecycle_integration.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          npx vitest run tests/contracts/v3_dev_fee_177.test.ts tests/contracts/v3_full_lifecycle_integration.test.ts tests/contracts/withdraw_funds.test.ts tests/contracts/buy_tokens.test.ts tests/contracts/exchange.test.ts tests/contracts/contract_creation.test.ts tests/contracts/counters.test.ts --no-color 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          EXIT_CODE=${PIPESTATUS[0]}
           echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $EXIT_CODE
