@@ -54,10 +54,60 @@ function getSerializedHex(reg: any): string | null {
     return null;
 }
 
+function hexToRawBytes(hex: string): Uint8Array {
+    const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+    if (clean.length === 0) return new Uint8Array(0);
+    const out = new Uint8Array(Math.floor(clean.length / 2));
+    for (let i = 0; i < out.length; i++) {
+        out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+    }
+    return out;
+}
+
+function readUVlq(bytes: Uint8Array, pos: number): [number, number] {
+    let value = 0;
+    let shift = 0;
+    while (pos < bytes.length) {
+        const b = bytes[pos++];
+        value |= (b & 0x7f) << shift;
+        if ((b & 0x80) === 0) break;
+        shift += 7;
+    }
+    return [value >>> 0, pos];
+}
+
 function parseR8ByteArrays(r8Reg: any): string[] | null {
     const serHex = getSerializedHex(r8Reg);
     if (serHex) {
-      try { const decoded = parse<any[]>(serHex); if (Array.isArray(decoded)) { return decoded.map((arr) => arr instanceof Uint8Array ? uint8ArrayToHex(arr) : Array.isArray(arr) ? uint8ArrayToHex(Uint8Array.from(arr)) : typeof arr === "string" ? arr : ""); } } catch { /* Fall through to renderedValue parser */ } }
+        try {
+            const bytes = hexToRawBytes(serHex);
+            if (bytes.length >= 2 && bytes[0] === 0x1a) {
+                let [count, pos] = readUVlq(bytes, 1);
+                const items: string[] = [];
+                for (let i = 0; i < count; i++) {
+                    let len: number;
+                    [len, pos] = readUVlq(bytes, pos);
+                    items.push(uint8ArrayToHex(bytes.subarray(pos, pos + len)));
+                    pos += len;
+                }
+                return items;
+            }
+            const decoded = parse<any[]>(serHex);
+            if (Array.isArray(decoded)) {
+                return decoded.map((arr) => {
+                    if (ArrayBuffer.isView(arr)) {
+                        return uint8ArrayToHex(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength));
+                    }
+                    if (Array.isArray(arr)) {
+                        return uint8ArrayToHex(Uint8Array.from(arr, (b: any) => Number(b) & 0xff));
+                    }
+                    return typeof arr === "string" ? arr : "";
+                });
+            }
+        } catch {
+            // Fall through to renderedValue parser
+        }
+    }
     if (r8Reg && typeof r8Reg.renderedValue === "string") {
         const trimmed = r8Reg.renderedValue.trim().replace(/^\[|\]$/g, "");
         return trimmed.split(",").map((s: string) => s.replace(/["'\s]/g, ""));
@@ -103,8 +153,29 @@ function parseR6Counters(r6Reg: any): [number, number, number] {
 
 function parseR9Utf8(r9Reg: any): string {
     const serHex = getSerializedHex(r9Reg);
-    if (serHex) { try { const bytes = parse<Uint8Array>(serHex); if (bytes instanceof Uint8Array) { return new TextDecoder("utf-8").decode(bytes); } } catch { /* Fall through */ } }
-    if (r9Reg && typeof r9Reg.renderedValue === "string") return hexToUtf8(r9Reg.renderedValue) ?? "";
+    if (serHex) {
+        try {
+            const raw = hexToRawBytes(serHex);
+            if (raw.length >= 2 && raw[0] === 0x0e) {
+                const [len, pos] = readUVlq(raw, 1);
+                return new TextDecoder("utf-8").decode(raw.subarray(pos, pos + len));
+            }
+            const parsedVal: any = parse(serHex);
+            if (ArrayBuffer.isView(parsedVal)) {
+                return new TextDecoder("utf-8").decode(
+                    new Uint8Array(parsedVal.buffer, parsedVal.byteOffset, parsedVal.byteLength)
+                );
+            }
+            if (typeof parsedVal === "string") {
+                return hexToUtf8(parsedVal) ?? "";
+            }
+        } catch {
+            // Fall through
+        }
+    }
+    if (r9Reg && typeof r9Reg.renderedValue === "string") {
+        return hexToUtf8(r9Reg.renderedValue) ?? "";
+    }
     return "";
 }
 
