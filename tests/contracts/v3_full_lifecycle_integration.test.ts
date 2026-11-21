@@ -3,7 +3,7 @@ import { blake2b256 } from "@fleet-sdk/crypto";
 import { uint8ArrayToHex } from "$lib/ergo/utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MockChain } from "@fleet-sdk/mock-chain";
-import { ErgoAddress } from "@fleet-sdk/core";
+import { ErgoAddress , OutputBuilder, TransactionBuilder, SAFE_MIN_BOX_VALUE} from "@fleet-sdk/core";
 import { get } from "svelte/store";
 import { __setMockWallet } from "wallet-svelte-component";
 import { submit_project } from "$lib/ergo/actions/submit";
@@ -24,6 +24,7 @@ import {
 import { is_legacy_version } from "$lib/common/project";
 import { explorer_uri, projects, project_id_conflicts } from "$lib/common/store";
 import { ErgoPlatform } from "$lib/ergo/platform";
+function assetsEqual(a: any[] = [], b: any[] = []): boolean { return a.length === b.length && a.every((x, i) => x.tokenId === b[i].tokenId && BigInt(x.amount) === BigInt(b[i].amount)); }
 
 class InMemoryExplorer {
     public boxesById = new Map<string, any>();
@@ -42,32 +43,12 @@ class InMemoryExplorer {
             }
         }
 
-        const recordTxId = txIndex.toString(16).padStart(64, "0");
-
-        for (const inp of eip12Tx.inputs) {
-            const existing = this.boxesById.get(inp.boxId) ?? Array.from(this.boxesById.values()).find((b) => !b.spentTransactionId && b.ergoTree === inp.ergoTree && BigInt(b.value) === BigInt(inp.value) && b.assets.length === (inp.assets || []).length);
-            if (existing) existing.spentTransactionId = recordTxId;
-        }
-        for (const oldId of preExecBoxIds) {
-            if (!afterMap.has(oldId)) {
-                const existing = this.boxesById.get(oldId);
-                if (existing && !existing.spentTransactionId) {
-                    existing.spentTransactionId = recordTxId;
-                }
-            }
-        }
+      const recordTxId = txIndex.toString(16).padStart(64, "0"); const preUsed = new Set<string>(); const matchedList = eip12Tx.outputs.map((out: any, idx: number) => { const mf = (u: any, ri: boolean) => !preUsed.has(u.boxId) && (!ri || u.index === idx) && u.ergoTree === out.ergoTree && BigInt(u.value) === BigInt(out.value) && assetsEqual(u.assets || [], out.assets || []); const m = newUtxos.find((u) => mf(u, true)) ?? newUtxos.find((u) => mf(u, false)); if (m) preUsed.add(m.boxId); return m; }); const actualTxId = matchedList.find((m: any) => m?.transactionId)?.transactionId ?? recordTxId;
 
         const usedBoxIds = new Set<string>();
         const outputs = eip12Tx.outputs.map((out: any, idx: number) => {
-            const matched = newUtxos.find(
-                (u) =>
-                    !usedBoxIds.has(u.boxId) &&
-                    u.ergoTree === out.ergoTree &&
-                    BigInt(u.value) === BigInt(out.value) &&
-                    (u.assets || []).length === (out.assets || []).length
-            );
-            if (matched) usedBoxIds.add(matched.boxId);
-            const outTxId = matched?.transactionId ?? recordTxId;
+            const matched = matchedList[idx];
+            const outTxId = actualTxId;
             const outIndex = matched?.index ?? idx;
             const rawRegs = matched?.additionalRegisters ?? out.additionalRegisters ?? {};
             const treeHex = matched?.ergoTree ?? out.ergoTree;
@@ -104,7 +85,7 @@ class InMemoryExplorer {
 
             const rec = {
                 boxId,
-                transactionId: matched?.transactionId ?? recordTxId,
+                transactionId: actualTxId,
                 index: matched?.index ?? idx,
                 value: Number(matched?.value ?? out.value),
                 ergoTree: treeHex,
@@ -121,8 +102,8 @@ class InMemoryExplorer {
             return rec;
         });
 
-        this.txsById.set(recordTxId, { id: recordTxId, numConfirmations: 1, outputs });
-        return recordTxId;
+        for (const bid of preExecBoxIds) { if (!afterMap.has(bid)) { const ex = this.boxesById.get(bid); if (ex && !ex.spentTransactionId) ex.spentTransactionId = actualTxId; } } for (const inp of eip12Tx.inputs ?? []) { const byId = this.boxesById.get(inp.boxId); if (byId) { byId.spentTransactionId = actualTxId; } else { const match = Array.from(this.boxesById.values()).find((b: any) => !b.spentTransactionId && b.ergoTree === inp.ergoTree && BigInt(b.value) === BigInt(inp.value) && assetsEqual(b.assets, inp.assets || [])); if (match) match.spentTransactionId = actualTxId; this.boxesById.set(inp.boxId, { boxId: inp.boxId, transactionId: inp.transactionId ?? actualTxId, index: inp.index ?? 0, ergoTree: inp.ergoTree, creationHeight: inp.creationHeight ?? mockChain.height, value: inp.value !== undefined ? BigInt(inp.value).toString() : "0", assets: (inp.assets || []).map((a: any) => ({ tokenId: a.tokenId, amount: BigInt(a.amount).toString() })), additionalRegisters: inp.additionalRegisters ?? {}, spentTransactionId: actualTxId }); } } this.txsById.set(actualTxId, { id: actualTxId, numConfirmations: 1, inputs: eip12Tx.inputs, outputs });
+        return actualTxId;
     }
 
     installFetchMock() {
@@ -162,6 +143,7 @@ class InMemoryExplorer {
                 const items = Array.from(self.boxesById.values()).filter((b) =>
                     b.assets.some((a: any) => a.tokenId === id)
                 );
+                items.sort((a, b) => a.creationHeight - b.creationHeight || a.boxId.localeCompare(b.boxId));
                 return new Response(JSON.stringify({ items: items.slice(off, off + lim) }), { status: 200 });
             }
             if (url.includes("/api/v1/boxes/")) {
@@ -212,7 +194,8 @@ function setupLifecycleEnv(version: contract_version, pftTokenId: string, emissi
     const mintParty = mockChain.addParty(ErgoAddress.fromBase58(mint_contract_address(dummy, version)).ergoTree, "MintContract");
     const terminalParty = mockChain.addParty(TERMINAL_ERGOTREE_HEX, "Terminal");
     const trackedParties = [owner, buyer, beneParty, mintParty, terminalParty];
-
+    for (const p of trackedParties) { for (const u of p.utxos.toArray()) { explorer.boxesById.set(u.boxId, { boxId: u.boxId, transactionId: u.transactionId, index: u.index, value: Number(u.value), ergoTree: u.ergoTree, ergoTreeTemplateHash: compute_ergotree_template_hash(u.ergoTree) ?? "other", assets: (u.assets || []).map((a: any) => ({ tokenId: a.tokenId, amount: Number(a.amount) })), creationHeight: u.creationHeight, additionalRegisters: u.additionalRegisters ?? {}, spentTransactionId: null }); } }
+    
     let txCount = 0;
     const state = { signer: owner };
 
@@ -422,5 +405,7 @@ describe("Full End-to-End Project Lifecycle & Lineage Integration (Issues #176 &
         env.state.signer = env.owner;
         expect(calculateDevFee(19n, 5, "v2")).toBe(0n);
         expect(await withdraw(v2Proj, 2)).toBeTruthy();
-    });
-});
+    });    it("resolves v2 tie-break when spoofed box has equal creationHeight and smaller boxId", async () => { const pftId = "e1".repeat(32); const env = setupLifecycleEnv("v2", pftId, 100); const gen = submit_project("v2", pftId, 100, 800_500, false, 100_000_000, JSON.stringify({ title: "TieV2", description: "Desc", image: "", link: "" }), 50, "TieV2"); await gen.next(); await gen.next(); await fetchProjectsFromBlockchain(); const v2Id = Array.from(get(projects).data.keys())[0]; let v2Proj = (await fetchProjectById(v2Id))!; const canonicalId = v2Proj.box.boxId; const baseBox = env.explorer.boxesById.get(canonicalId); const smallerBoxId = "00".repeat(32); env.explorer.boxesById.set(smallerBoxId, { ...baseBox, boxId: smallerBoxId, transactionId: "01".repeat(32), creationHeight: baseBox.creationHeight, assets: [{ tokenId: v2Id, amount: 1 }, { tokenId: pftId, amount: 100 }], spentTransactionId: null }); await fetchProjectsFromBlockchain(); expect(get(projects).data.get(v2Id)?.box.boxId).toBe(canonicalId); expect((await fetchProjectById(v2Id))?.box.boxId).toBe(canonicalId); });
+    
+    it("rejects fake dual-version v3 token and P2PK-derived box outside mint chain", async () => { const pftId = "e2".repeat(32); const env = setupLifecycleEnv("v3", pftId, 100); const gen = submit_project("v3", pftId, 100, 800_500, false, 100_000_000, JSON.stringify({ title: "AdvV3", description: "Desc", image: "", link: "" }), 50, "AdvV3"); await gen.next(); await gen.next(); await fetchProjectsFromBlockchain(); const nftId = Array.from(get(projects).data.keys())[0]; const v3Proj = (await fetchProjectById(nftId))!; const baseBox = env.explorer.boxesById.get(v3Proj.box.boxId); const fakeDual = { ...baseBox, boxId: "d1".repeat(32), transactionId: "d2".repeat(32), ergoTree: get_ergotree_hex(v3Proj.constants, "v3"), ergoTreeTemplateHash: get_template_hash("v3"), assets: [{ tokenId: "dd".repeat(32), amount: 1 }, { tokenId: nftId, amount: 1 }, { tokenId: pftId, amount: 100 }] }; expect(await parseProjectBox(fakeDual, "v3")).toBeNull(); const p2pkBoxId = "e3".repeat(32); const p2pkTxId = "e4".repeat(32); env.explorer.txsById.set(p2pkTxId, { id: p2pkTxId, inputs: [{ boxId: "e5".repeat(32), address: env.buyer.address.toString(), ergoTree: env.buyer.ergoTree, assets: [] }], outputs: [] }); env.explorer.boxesById.set(p2pkBoxId, { ...baseBox, boxId: p2pkBoxId, transactionId: p2pkTxId, ergoTree: env.buyer.ergoTree, ergoTreeTemplateHash: "other", assets: [{ tokenId: "cc".repeat(32), amount: 1 }, { tokenId: pftId, amount: 100 }], spentTransactionId: null }); expect(await parseProjectBox(env.explorer.boxesById.get(p2pkBoxId), "v3")).toBeNull(); expect(await fetchProjectById("cc".repeat(32))).toBeNull(); });
+    it("spends TOKEN_B box without touching identical TOKEN_A box and records txId in txsById", async () => { const tokenA = "aa".repeat(32); const tokenB = "bb".repeat(32); const env = setupLifecycleEnv("v3", tokenB, 100); const gen = submit_project("v3", tokenB, 100, 800_500, false, 100_000_000, JSON.stringify({ title: "IsoAB", description: "Desc", image: "", link: "" }), 50, "IsoAB"); await gen.next(); await gen.next(); await fetchProjectsFromBlockchain(); const id = Array.from(get(projects).data.keys())[0]; let p = (await fetchProjectById(id))!; env.state.signer = env.buyer; await buy_refund(p, 60); p = (await fetchProjectById(id))!; const buyerBBox = env.buyer.utxos.toArray().find((u: any) => u.assets.some((a: any) => a.tokenId === tokenB))!; env.buyer.addUTxOs({ value: buyerBBox.value, ergoTree: buyerBBox.ergoTree, assets: [{ tokenId: tokenA, amount: buyerBBox.assets[0].amount }], creationHeight: buyerBBox.creationHeight, additionalRegisters: {} }); const txId = await buy_refund(p, -20); expect(txId).toBeTruthy(); expect(env.explorer.txsById.has(String(txId))).toBe(true); const aBoxes = env.buyer.utxos.toArray().filter((u: any) => u.assets.some((a: any) => a.tokenId === tokenA)); expect(aBoxes.length).toBe(1); expect(aBoxes[0].ergoTree).toBe(buyerBBox.ergoTree); expect(aBoxes[0].value).toBe(buyerBBox.value); expect(aBoxes[0].assets.length).toBe(buyerBBox.assets.length); expect(aBoxes[0].assets[0].amount).toBe(buyerBBox.assets[0].amount); }); });
