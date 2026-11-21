@@ -14,11 +14,12 @@ import {
     get_ergotree_hex,
     get_template_hash,
     mint_contract_address,
+    compute_ergotree_template_hash,
     TERMINAL_ERGOTREE_HEX,
     type contract_version,
 } from "$lib/ergo/contract";
 import { is_legacy_version } from "$lib/common/project";
-import { projects, project_id_conflicts } from "$lib/common/store";
+import { projects, project_id_conflicts, explorer_uri } from "$lib/common/store";
 import { ErgoPlatform } from "$lib/ergo/platform";
 
 class InMemoryExplorer {
@@ -26,21 +27,30 @@ class InMemoryExplorer {
     public txsById = new Map<string, any>();
     public tokenRegistry = new Map<string, { name: string; description: string; decimals: number; emissionAmount: number }>();
 
-    syncTx(eip12Tx: any, mockChain: MockChain, preExecBoxIds: Set<string>, txIndex: number): string { const newUtxos: any[] = []; for (const p of (mockChain as any).parties as any[]) { for (const u of p.utxos.toArray()) { if (!preExecBoxIds.has(u.boxId)) { newUtxos.push(u); } } } const fallbackHexTxId = txIndex.toString(16).padStart(64, "0"); const txId: string = newUtxos[0]?.transactionId ?? fallbackHexTxId; for (const inp of eip12Tx.inputs) { const existing = this.boxesById.get(inp.boxId); if (existing) existing.spentTransactionId = txId; }
-        const dummy = {
-            owner: "9fcwctfPQPkDfHgxBns5Uu3dwWpaoywhkpLEobLuztfQuV5mt3T",
-            dev_hash: "00".repeat(32),
-            dev_fee: 5,
-            pft_token_id: "11".repeat(32),
-        };
-        const v3Hex = get_ergotree_hex(dummy, "v3");
-        const v2Hex = get_ergotree_hex(dummy, "v2");
+    syncTx(eip12Tx: any, mockChain: MockChain, trackedParties: any[], preExecBoxIds: Set<string>, txIndex: number): string {
+        const newUtxos: any[] = [];
+        for (const p of trackedParties) {
+            for (const u of p.utxos.toArray()) {
+                if (!preExecBoxIds.has(u.boxId)) {
+                    newUtxos.push(u);
+                }
+            }
+        }
+
+        const fallbackHexTxId = txIndex.toString(16).padStart(64, "0");
+        const txId: string = newUtxos[0]?.transactionId ?? fallbackHexTxId;
+
+        for (const inp of eip12Tx.inputs) {
+            const existing = this.boxesById.get(inp.boxId);
+            if (existing) existing.spentTransactionId = txId;
+        }
 
         const outputs = eip12Tx.outputs.map((out: any, idx: number) => {
-           const matched = newUtxos.find((u) => u.index === idx); const boxId: string = matched ? matched.boxId : `${txId.slice(0, 60)}${idx.toString(16).padStart(4, "0")}`;;
-            const tpl =
-                out.ergoTree === v3Hex ? get_template_hash("v3") :
-                out.ergoTree === v2Hex ? get_template_hash("v2") : "other";
+            const matched = newUtxos.find((u) => u.index === idx);
+            const boxId: string = matched
+                ? matched.boxId
+                : `${txId.slice(0, 60)}${idx.toString(16).padStart(4, "0")}`;
+            const tpl = compute_ergotree_template_hash(out.ergoTree) ?? "other";
 
             const regs: Record<string, any> = {};
             for (const [k, hexVal] of Object.entries(out.additionalRegisters || {})) {
@@ -159,10 +169,10 @@ function setupLifecycleEnv(version: contract_version, pftTokenId: string, emissi
     });
 
     const dummy = { owner: owner.address.toString(), dev_hash: "00".repeat(32), dev_fee: 5, pft_token_id: pftTokenId, base_token_id: baseTokenId };
-    mockChain.addParty(get_ergotree_hex(dummy, version), "BeneContract");
-    mockChain.addParty(ErgoAddress.fromBase58(mint_contract_address(dummy, version)).ergoTree, "MintContract");
+    const beneParty = mockChain.addParty(get_ergotree_hex(dummy, version), "BeneContract");
+    const mintParty = mockChain.addParty(ErgoAddress.fromBase58(mint_contract_address(dummy, version)).ergoTree, "MintContract");
     const terminalParty = mockChain.addParty(TERMINAL_ERGOTREE_HEX, "Terminal");
-
+    const trackedParties = [owner, buyer, beneParty, mintParty, terminalParty];
     let txCount = 0;
     const state = { signer: owner };
 
@@ -182,10 +192,13 @@ function setupLifecycleEnv(version: contract_version, pftTokenId: string, emissi
             })),
         signTransaction: async (tx) => tx,
         submitTransaction: async (tx) => {
-            const preExecBoxIds = new Set<string>(); for (const p of (mockChain as any).parties as any[]) { for (const u of p.utxos.toArray()) preExecBoxIds.add(u.boxId); }
-            expect(mockChain.execute(tx, { signers: [state.signer] })).toBe(true);
-            txCount += 1;
-            return explorer.syncTx(tx, mockChain, preExecBoxIds, txCount);
+          const preExecBoxIds = new Set<string>();
+                for (const p of trackedParties) {
+                    for (const u of p.utxos.toArray()) preExecBoxIds.add(u.boxId);
+                }
+                expect(mockChain.execute(tx, { signers: [state.signer] })).toBe(true);
+                txCount += 1;
+                return explorer.syncTx(tx, mockChain, trackedParties, preExecBoxIds, txCount);
         },
     });
 
@@ -220,6 +233,13 @@ describe("Full End-to-End Project Lifecycle & Lineage Integration (Issues #176 &
 
         await fetchProjectsFromBlockchain();
         const created = Array.from(get(projects).data.values())[0];
+        if (!created) {
+            const boxes = Array.from(env.explorer.boxesById.values()).map((b) => ({
+                id: b.boxId, tpl: b.ergoTreeTemplateHash, v3Tpl: get_template_hash("v3"),
+                spent: b.spentTransactionId, assets: b.assets, r8: b.additionalRegisters?.R8?.serializedValue,
+            }));
+            throw new Error("DIAG_NO_PROJECT: " + JSON.stringify(boxes));
+        }
         const nftId = created.project_id;
         expect(created.version).toBe("v3");
         expect(is_legacy_version(created.version)).toBe(false);
