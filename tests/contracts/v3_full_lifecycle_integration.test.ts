@@ -45,7 +45,7 @@ class InMemoryExplorer {
         const recordTxId = txIndex.toString(16).padStart(64, "0");
 
         for (const inp of eip12Tx.inputs) {
-            const existing = this.boxesById.get(inp.boxId);
+            const existing = this.boxesById.get(inp.boxId) ?? Array.from(this.boxesById.values()).find((b) => !b.spentTransactionId && b.ergoTree === inp.ergoTree && BigInt(b.value) === BigInt(inp.value) && b.assets.length === (inp.assets || []).length);
             if (existing) existing.spentTransactionId = recordTxId;
         }
         for (const oldId of preExecBoxIds) {
@@ -232,13 +232,13 @@ function setupLifecycleEnv(version: contract_version, pftTokenId: string, emissi
             })),
         signTransaction: async (tx) => tx,
         submitTransaction: async (tx) => {
-            const preExecBoxIds = new Set<string>();
+            const txSnapshot = JSON.parse(JSON.stringify(tx)); const preExecBoxIds = new Set<string>();
             for (const p of trackedParties) {
                 for (const u of p.utxos.toArray()) preExecBoxIds.add(u.boxId);
             }
             expect(mockChain.execute(tx, { signers: [state.signer] })).toBe(true);
             txCount += 1;
-            return explorer.syncFromParties(tx, mockChain, trackedParties, preExecBoxIds, txCount);
+            return explorer.syncFromParties(txSnapshot, mockChain, trackedParties, preExecBoxIds, txCount);
         },
     });
 
