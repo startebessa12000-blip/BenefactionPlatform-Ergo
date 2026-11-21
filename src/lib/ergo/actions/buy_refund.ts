@@ -116,7 +116,7 @@ export async function buy_refund(
             .sendChangeTo(walletPk)
             .payFee(RECOMMENDED_MIN_FEE_VALUE)
             .build();
-        const minBoxErg = BigInt(serializeBox(probeTx.outputs[0]).length) * 360n;
+        const minBoxErg = BigInt(serializeBox(probeTx.outputs[0]).toBytes().length) * 360n;
         if (minBoxErg > contractErgValue) {
             contractErgValue = minBoxErg;
         }
