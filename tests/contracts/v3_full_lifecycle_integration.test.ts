@@ -86,7 +86,7 @@ class InMemoryExplorer {
                               additionalRegisters: rawRegs,
                               transactionId: outTxId,
                               index: outIndex,
-                          })
+                          }).toBytes()
                       )
                   );
             
